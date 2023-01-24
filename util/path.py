@@ -9,6 +9,9 @@ def project_root():
 def data_root():
     return project_root() / "data"
 
+def lib_root():
+    return project_root() / 'lib'
+
 def make_path_safe(raw_path):
     """
     Parse string to path string for file storage.

@@ -1,9 +1,7 @@
 import json
-import sys
 
 import nltk
 
-from download_script import show_progress
 from util import path
 from multiprocessing import pool
 import text2emotion as te
@@ -29,7 +27,7 @@ def analyse_chapter_sentiment(chapter_tuple):
                 slept_for += 1
                 if slept_for > 60:
                     print(slept_for)
-
+    print("#", end='')
 
     return index, chapter_sentiment
 

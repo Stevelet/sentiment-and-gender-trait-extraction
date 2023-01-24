@@ -42,5 +42,5 @@ plt.ylabel('Sentiment distribution', fontweight='bold', fontsize=15)
 plt.xlabel('Chapter numbers', fontweight='bold', fontsize=15)
 plt.title(representation_book[1]['title'] + ' by ' + representation_book[1]['author'])
 
-plt.legend()
+plt.legend(loc='upper left')
 plt.show()

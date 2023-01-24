@@ -29,4 +29,6 @@ class BookParser(HTMLParser):
             self.single_chapter_book = True
 
     def retrieve_chapter_urls(self):
+        if len(self.chapter_urls) == 0:
+            return [(None, self.url_suffix)]
         return self.chapter_urls

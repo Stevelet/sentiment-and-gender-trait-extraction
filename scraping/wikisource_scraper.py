@@ -1,13 +1,13 @@
 import json
-from urllib.request import urlopen
 from parsers.index_parser import IndexParser
 from parsers.book_parser import BookParser
 from parsers.chapter_parser import ChapterParser
+from parsers.single_chapter_parser import SingleChapterParser
 import re
 import os.path
 import unicodedata
 from download_script import show_progress
-from database.database_connector import create_connection
+from scraping.html_cacher import retrieve_html
 from util import path as path_util
 
 url_root = "https://en.wikisource.org"
@@ -26,20 +26,6 @@ def get_or_create_dir(path, dirname):
     if not os.path.exists(full_path) or not os.path.isdir(full_path):
         os.mkdir(full_path)
     return full_path
-
-
-
-def retrieve_html(url):
-    """
-    Retrieve the html found at the given url and parse to string.
-
-    :param url: Url to GET
-    :return: The body html as a string
-    """
-    with urlopen(url) as response:
-        html = response.read()
-        response.close()
-        return str(html)
 
 
 def clean_hexadecimal(raw_str, remove=True):
@@ -77,7 +63,7 @@ def sanitize_file(file_path):
     if old_lines == lines:
         return file_path
 
-    with open(file_path, "w") as file:
+    with open(file_path, "w", encoding="utf-8") as file:
         file.write(lines)
 
     return file_path
@@ -95,7 +81,7 @@ def retrieve_book_details(data_path):
 
     base_book_list = []
 
-    index_parser = IndexParser()
+    index_parser = IndexParser(url_root)
     index_parser.feed(retrieve_html(base_url))
     book_index_dict = index_parser.retrieve_result()
 
@@ -151,9 +137,55 @@ def store_book_details(data_path, book_tuples):
         part = part[:-1] + '\n'
         csv_string += part
 
-    with open(os.path.join(str(data_path), 'wikisource.csv'), 'w') as file:
+    with open(os.path.join(str(data_path), 'wikisource.csv'), 'w', encoding="utf-8") as file:
         file.write(csv_string)
 
+def parse_single_chapter(book_tuple, book_path, force):
+    chapter_list = []
+
+    chapter_tuple = book_tuple[7][0]
+    chapter_name = path_util.make_path_safe(book_tuple[1])
+
+    chapter_path = os.path.join(book_path, chapter_name + '.txt')
+
+    chapter_list.append(chapter_path)
+
+    if os.path.exists(chapter_path) and not force:
+        return chapter_list
+
+    chapter_html = retrieve_html(url_root + chapter_tuple[1])
+    chapter_parser = SingleChapterParser()
+    chapter_parser.feed(chapter_html)
+    chapter_text = chapter_parser.retrieve_text().strip()
+
+    with open(chapter_path, 'w', encoding='utf-8') as file:
+        file.write(chapter_text)
+
+    return chapter_list
+
+
+def parse_multiple_chapters(book_tuple, book_path, force):
+    chapter_list = []
+
+    for chapter_tuple in book_tuple[7]:
+        chapter_name = path_util.make_path_safe('_'.join(chapter_tuple[0].split('/')[1:]))
+
+        chapter_path = os.path.join(book_path, chapter_name + '.txt')
+
+        chapter_list.append(chapter_path)
+
+        if os.path.exists(chapter_path) and not force:
+            continue
+
+        chapter_html = retrieve_html(url_root + chapter_tuple[1])
+        chapter_parser = ChapterParser()
+        chapter_parser.feed(chapter_html)
+        chapter_text = chapter_parser.retrieve_text().strip()
+
+        with open(chapter_path, 'w', encoding='utf-8') as file:
+            file.write(chapter_text)
+
+    return chapter_list
 
 def store_book_chapters(data_path, book_tuples, force):
     """
@@ -168,27 +200,15 @@ def store_book_chapters(data_path, book_tuples, force):
     for count, book_tuple in enumerate(book_tuples):
         show_progress(count, 1, len(book_tuples))
 
-        book_path = data_path + book_tuple[6]
-        chapter_list = []
+        book_path = str(data_path) + book_tuple[6]
 
-        for chapter_tuple in book_tuple[7]:
-            chapter_name = path_util.make_path_safe('_'.join(chapter_tuple[0].split('/')[1:]))
 
-            chapter_path = os.path.join(book_path, chapter_name + '.txt')
+        if len(book_tuple[7]) == 1 and book_tuple[7][0][0] == None:
+            book_tuple[7][0] = (book_tuple[7][0][1].replace('/wiki/', ''), book_tuple[7][0][1])
+            chapter_list = parse_single_chapter(book_tuple, book_path, force)
+        else:
+            chapter_list = parse_multiple_chapters(book_tuple, book_path, force)
 
-            chapter_list.append(chapter_path)
-
-            if os.path.exists(chapter_path) and not force:
-                continue
-
-            chapter_html = retrieve_html(url_root + chapter_tuple[1])
-            chapter_parser = ChapterParser()
-            chapter_parser.feed(chapter_html)
-            chapter_text = chapter_parser.retrieve_text().strip()
-
-            with open(chapter_path, 'w') as file:
-                # noinspection SpellCheckingInspection
-                file.write(unicodedata.normalize('NFKD', chapter_text).encode('ascii', 'ignore').decode("utf-8"))
         chapter_matrix.append(chapter_list)
     return chapter_matrix
 
@@ -201,8 +221,11 @@ def download_wikisource(data_path, force=False):
     :param force: Force redownload even if present
     :return: A list of tuples corresponding to the csv file that is generated
     """
+    print("\nRetrieving book details")
     book_details = retrieve_book_details(data_path)
+    print("\nStoring book details")
     store_book_details(data_path, book_details)
+    print("\nStoring book chapters")
     chapter_matrix = store_book_chapters(data_path, book_details, force)
     print("\nSanitizing chapters")
     for count, chapter_list in enumerate(chapter_matrix):
@@ -222,6 +245,7 @@ def create_wikisource_json():
 
     wikisource_json = []
     for (book, chapter) in zipped:
+        print(book)
         book_json = {}
         for index, header in enumerate(headers):
             book_json[header] = book[index]
@@ -232,3 +256,6 @@ def create_wikisource_json():
         file.write(str(json.dumps(wikisource_json)))
 
     return wikisource_json
+
+
+create_wikisource_json()

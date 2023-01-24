@@ -45,5 +45,5 @@ test_accuracy = clf.score(Xtestthis, Ytestthis)
 def lookup(x):
     str(x)
     new = char_vectorizer.transform([x])
-    y_pred = clf.predict(new)
-    return 'M' if (y_pred == 1) else 'F'
+    y_pred = clf.predict_proba(new)
+    return y_pred

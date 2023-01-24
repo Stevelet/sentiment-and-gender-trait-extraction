@@ -13,26 +13,30 @@ directory = path.data_root() / 'gender'
 pronoun_map = {'he': 'male', 'him': 'male', 'himself': 'male', 'his': 'male', 'she': 'female', 'her': 'female',
                'hers': 'female', 'herself': 'female'}
 
-book = json.load(open(path.data_root() / 'gender' / 'Through_the_Looking_Glass__and_What_Alice_Found_There.json'))
 
-names = {'M': 0, 'F': 0}
-name_genders = {}
+def breakdown_gender_distribution(book_path):
+    book = json.load(open(book_path, 'r'))
 
-for key in book['chapter_person_names'].keys():
-    chapter_names = book['chapter_person_names'][key]
-    for name in chapter_names:
-        if name not in name_genders.keys():
-            name_genders[name] = gc.lookup(name)
-        names[name_genders[name]] += 1
+    name_genders = {}
 
-pronoun_genders = {'male': 0, 'female': 0}
+    for key in book['chapter_person_names'].keys():
+        chapter_names = book['chapter_person_names'][key]
+        for name in chapter_names:
+            breakdown = gc.lookup(name)
+            name_genders.setdefault(name, {'F': 0, 'M': 0})['F'] += breakdown[0][0]
+            name_genders.setdefault(name, {'F': 0, 'M': 0})['M'] += breakdown[0][1]
 
-for key in book['chapter_pronouns'].keys():
-    chapter_pronouns = book['chapter_pronouns'][key]
-    for pronoun in chapter_pronouns.keys():
-        pronoun_genders[pronoun_map[pronoun]] += 1
+    pronoun_genders = {'male': 0, 'female': 0}
 
-file_name = path.make_path_safe(book['title']) + '.json'
-with open(path.data_root() / 'gender_breakdown' / file_name, 'w+') as file:
-    st = json.dumps({'title': book['title'], 'pronoun_genders': pronoun_genders, 'names': names, 'name_genders': name_genders})
-    file.write(st)
+    for chapter, values in book['chapter_pronouns'].items():
+        for key, value in values.items():
+            pronoun_genders[pronoun_map[key]] += value
+
+    file_name = path.make_path_safe(book['title']) + '.json'
+    with open(path.data_root() / 'gender_breakdown' / file_name, 'w+') as file:
+        st = json.dumps({'title': book['title'], 'pronoun_genders': pronoun_genders, 'name_genders': name_genders})
+        file.write(st)
+
+
+for book_file in os.listdir(directory):
+    breakdown_gender_distribution(directory / book_file)
